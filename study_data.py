@@ -3,76 +3,31 @@ import pandas as pd
 import sklearn as sk
 import matplotlib.pyplot as plt
 from datetime import datetime
-from csv_reader_by_line import *
+from submit import *
+from knn_estim import *
 
-rdr = csv_reader_by_line("csv/Gestion.csv", ";")
-header = rdr.header
+file = "Services"
 
-class Intraday_volume_rate:
-    def __init__(self, w_hol=False, w_ds=False):
-        self.d = [np.array([]) for i in range(0,48)]
-        self.w_hol = w_hol
-        self.w_ds = w_ds
+df_calls = pd.read_csv("csv/"+file+".csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index()
 
-    def add_data(self, time, v, hol = False, ds = False):
-        l = time.split(" ")
-        d = l[0].split("-")
-        t = l[1].split(":")
+df_calls_estim = pd.DataFrame(index=df_calls.index, columns=df_calls.columns)
+datas = create_data(file)
 
-        ind = int(t[0])*2+int(int(t[1])/30)
+for e in df_calls.index:
+    if np.isnan(df_calls.loc[e,"CSPL_RECEIVED_CALLS"]):
+        weekday = e.weekday()
+        w_estim = e.isocalendar()[1] + 51
+        if e.year == 2013:
+            w_estim+=52
+        if np.sum(np.isnan(datas[weekday][0][w_estim-2]))==0:
+            print(e)
+            #r = k_nn_estim_oneday(datas[weekday][w_estim-2],datas[weekday],5, dist_eucl)
+            #r_h = r[2*e.hour+int(e.minute/30)]
+            r = datas[weekday][1].predict([datas[weekday][0][w_estim - 2]])
+            r_h = np.ceil(r[0][2*e.hour+int(e.minute/30)])
 
-        if (hol and not w_hol) or (ds and not w_ds):
-            return
-        else:
-            self.d[ind] = np.append(self.d[ind], int(v))
+            df_calls_estim.loc[e,"CSPL_RECEIVED_CALLS"]=np.ceil(r_h)
 
-    def return_mean(self):
-        return [np.mean(e) for e in self.d]
-
-    def return_var(self):
-        return [np.var(e) for e in self.d]
-
-results = {}
-c_time = header.index("DATE")
-c_vol = header.index("CSPL_RECEIVED_CALLS")
-
-print("Start of processing")
-counter = 0
-step = int(1e5)
-while True:
-    if counter%step==0 and counter > 0:
-        print("Processed entries :"+str(counter))
-    try:
-        item = rdr.next_line()
-        l = item[c_time].split(" ")
-        d = l[0].split("-")
-        t = l[1].split(":")
-        time = datetime(year=int(d[0]), month=int(d[1]), day=int(d[2]))
-
-        if time.weekday() not in results:
-            results[time.weekday()] = Intraday_volume_rate()
-        results[time.weekday()].add_data(item[c_time], item[c_vol])
-
-    except StopIteration:
-        break
-    counter+=1
-
-print("Process finished, now printing...")
-
-times = []
-for e in range(0,48):
-    times += [e/2]
-
-for e in results:
-    plt.plot(times,results[e].return_mean(), label=e)
-
-plt.legend()
+plt.plot(df_calls.loc['20121102':'20131230'].values)
+plt.plot(df_calls_estim.loc['20121102':'20131230'].values)
 plt.show()
-
-for e in results:
-    plt.plot(times,results[e].return_var(), label=e)
-
-plt.legend()
-plt.show()
-
-print("Study finished!")

@@ -6,6 +6,25 @@ import matplotlib
 matplotlib.style.use('ggplot')
 from datetime import datetime, date
 
+def approx_svd(mat, k):
+    U,s,V = np.linalg.svd(mat, full_matrices=False)
+    S = np.diag(s[0:k])
+    return np.dot(U[:,0:k], np.dot(S, V[0:k,:]))
+
+def create_xy(df_calls):
+    X = np.array([])
+    Y = np.array([])
+
+    for w in range(0,len(df_calls)-2):
+        if np.sum(np.isnan(df_calls[w]))==0 and np.sum(np.isnan(df_calls[w+2,:48]))==0:
+            if len(X)==0:
+                X = np.array([df_calls[w]])
+                Y = np.array([df_calls[w+2,:48]])
+            else:
+                X = np.append(X, [df_calls[w]], axis=0)
+                Y = np.append(Y, [df_calls[w+2,:48]], axis=0)
+
+    return X,Y
 
 def create_matrix(df, weekday):
     result=np.array([])
@@ -46,3 +65,15 @@ def create_matrix(df, weekday):
 
         first_day+=pd.Timedelta('7 day')
     return result
+
+def create_data(file):
+    print(file)
+    df_calls = pd.read_csv("csv/"+file+".csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index()
+
+    results = []
+    for i in range(0,7):
+        mat = create_matrix(df_calls,i)
+        mat[:100] = approx_svd(mat[:100], 10)
+        results+=[mat]
+
+    return results
