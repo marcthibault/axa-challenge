@@ -9,16 +9,13 @@ from datetime import datetime
 from rf_estim import *
 from gb_366_estim import *
 
-def load_data_create_days(file):
-    print(file)
-    df_calls = pd.read_csv("csv/"+file+".csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index()
-
+def load_data_create_days(csv_data, day_max=-1):
     results = []
     for i in range(0,7):
         print("Day: "+str(i))
-        mat = create_week_matrix(df_calls,i)
-        results+=[(mat,rf_create_regr(mat))]
-
+        mat = create_week_matrix(csv_data,i, day_max)
+        #results+=[(mat,rf_create_regr(mat))]
+        results+=[mat]
     return results
 
 def load_data_create_slots(file):

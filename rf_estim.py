@@ -6,6 +6,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, KFold
 from sklearn.pipeline import Pipeline, FeatureUnion
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.feature_selection import RFECV
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest
@@ -209,6 +210,7 @@ if __name__=="__main__":
     score_d_gb = 0
     score_d_ab = 0
     score_d_rf = 0
+    score_d_rf = 0
     score_w_gb = 0
     score_w_ab = 0
     score_w_rf = 0
@@ -220,54 +222,73 @@ if __name__=="__main__":
         print("Iter nb: "+str(iter))
         X_w_train, X_w_test, y_train, y_test = X_week[train], X_week[test], y[train], y[test]
         X_d_train, X_d_test = X_day[train], X_day[test]
+
+        x_w_maxs = np.max(X_w_train, axis=1)
+        x_d_maxs = np.max(X_d_train, axis=1)
+
+
+
         estim_w_rf = compute_estimator_rf(X_w_train, y_train)
         estim_d_rf = compute_estimator_rf(X_d_train, y_train)
-        estim_w_gb = compute_estimator_gb(X_w_train, y_train)
-        estim_w_ab = compute_estimator_ab(X_w_train, y_train)
-        estim_d_gb = compute_estimator_gb(X_d_train, y_train)
-        estim_d_ab = compute_estimator_ab(X_d_train, y_train)
+        estim_w_rf_s = compute_estimator_rf(X_w_train/x_w_maxs, y_train/x_w_maxs)
+        estim_d_rf_s = compute_estimator_rf(X_d_train/x_d_maxs, y_train/x_d_maxs)
+        #estim_w_gb = compute_estimator_gb(X_w_train, y_train)
+        #estim_w_ab = compute_estimator_ab(X_w_train, y_train)
+        #estim_d_gb = compute_estimator_gb(X_d_train, y_train)
+        #estim_d_ab = compute_estimator_ab(X_d_train, y_train)
         estim_w_rf.fit(X_w_train, y_train)
-        estim_w_gb.fit(X_w_train, y_train)
-        estim_w_ab.fit(X_w_train, y_train)
+        estim_w_rf_s.fit(X_w_train/x_w_maxs, y_train/x_w_maxs)
+        #estim_w_gb.fit(X_w_train, y_train)
+        #estim_w_ab.fit(X_w_train, y_train)
         estim_d_rf.fit(X_d_train, y_train)
-        estim_d_gb.fit(X_d_train, y_train)
-        estim_d_ab.fit(X_d_train, y_train)
+        estim_d_rf_s.fit(X_d_train/x_d_maxs, y_train/x_d_maxs)
+        #estim_d_gb.fit(X_d_train, y_train)
+        #estim_d_ab.fit(X_d_train, y_train)
 
         y_w_pred_rf = np.array(estim_w_rf.predict(X_w_test))
-        y_w_pred_gb = np.array(estim_w_gb.predict(X_w_test))
-        y_w_pred_ab = np.array(estim_w_ab.predict(X_w_test))
+        y_w_pred_rf_s = np.array(estim_w_rf_s.predict(X_w_test/x_w_maxs))
+        #y_w_pred_gb = np.array(estim_w_gb.predict(X_w_test))
+        #y_w_pred_ab = np.array(estim_w_ab.predict(X_w_test))
         y_d_pred_rf = np.array(estim_d_rf.predict(X_d_test))
-        y_d_pred_gb = np.array(estim_d_gb.predict(X_d_test))
-        y_d_pred_ab = np.array(estim_d_ab.predict(X_d_test))
+        y_d_pred_rf_s = np.array(estim_d_rf_s.predict(X_d_test/x_w_maxs))
+        #y_d_pred_gb = np.array(estim_d_gb.predict(X_d_test))
+        #y_d_pred_ab = np.array(estim_d_ab.predict(X_d_test))
 
         iter+=1
         score_w_rf=err_fun(y_test,y_w_pred_rf)
-        score_w_gb=err_fun(y_test,y_w_pred_gb)
-        score_w_ab=err_fun(y_test,y_w_pred_ab)
+        score_w_rf_s=err_fun(y_test,y_w_pred_rf_s*x_w_maxs)
+        #score_w_gb=err_fun(y_test,y_w_pred_gb)
+        #score_w_ab=err_fun(y_test,y_w_pred_ab)
         score_d_rf=err_fun(y_test,y_d_pred_rf)
-        score_d_gb=err_fun(y_test,y_d_pred_gb)
-        score_d_ab=err_fun(y_test,y_d_pred_ab)
+        score_d_rf_s=err_fun(y_test,y_d_pred_rf_s*x_d_maxs)
+        #score_d_gb=err_fun(y_test,y_d_pred_gb)
+        #score_d_ab=err_fun(y_test,y_d_pred_ab)
         score_t_rf=err_fun(y_test,np.maximum(y_w_pred_rf,y_d_pred_rf))
-        score_t_gb=err_fun(y_test,np.maximum(y_w_pred_gb,y_d_pred_gb))
-        score_t_ab=err_fun(y_test,np.maximum(y_w_pred_ab,y_d_pred_ab))
-        score_t=err_fun(y_test,np.maximum(y_w_pred_ab,np.maximum(y_d_pred_ab,np.maximum(y_w_pred_gb,np.maximum(y_d_pred_gb,np.maximum(y_w_pred_rf,y_d_pred_rf))))))
+        #score_t_gb=err_fun(y_test,np.maximum(y_w_pred_gb,y_d_pred_gb))
+        #score_t_ab=err_fun(y_test,np.maximum(y_w_pred_ab,y_d_pred_ab))
+        #score_t=err_fun(y_test,np.maximum(y_w_pred_gb,np.maximum(y_d_pred_gb,np.maximum(y_w_pred_rf,y_d_pred_rf))))
+        #score_t=err_fun(y_test,np.maximum(y_w_pred_ab,np.maximum(y_d_pred_ab,np.maximum(y_w_pred_gb,np.maximum(y_d_pred_gb,np.maximum(y_w_pred_rf,y_d_pred_rf))))))
 
         print("Current score_w_rf: "+str(score_w_rf))
-        print("Current score_w_gb: "+str(score_w_gb))
-        print("Current score_w_ab: "+str(score_w_ab))
+        print("Current score_w_rf_s: "+str(score_w_rf_s))
+        #print("Current score_w_gb: "+str(score_w_gb))
+        #print("Current score_w_ab: "+str(score_w_ab))
         print("Current score_d_rf: "+str(score_d_rf))
-        print("Current score_d_gb: "+str(score_d_gb))
-        print("Current score_d_ab: "+str(score_d_ab))
+        print("Current score_d_rf_s: "+str(score_d_rf_s))
+        #print("Current score_d_gb: "+str(score_d_gb))
+        #print("Current score_d_ab: "+str(score_d_ab))
         print("Current score_t_rf: "+str(score_t_rf))
-        print("Current score_t_gb: "+str(score_t_gb))
-        print("Current score_t_ab: "+str(score_t_ab))
-        print("Current scofe_t: "+str(score_t))
+        #print("Current score_t_gb: "+str(score_t_gb))
+        #print("Current score_t_ab: "+str(score_t_ab))
+        #print("Current scofe_t: "+str(score_t))
         plt.plot(y_w_pred_rf, label="W_rf", ls="--", color="seagreen")
-        plt.plot(y_w_pred_gb, label="W_gb", ls="--", color="coral")
+        plt.plot(y_w_pred_rf_s*x_w_maxs, label="W_rf_s", ls="--", color="coral")
+        #plt.plot(y_w_pred_gb, label="W_gb", ls="--", color="coral")
         plt.plot(y_d_pred_rf, label="D_rf", ls=":", color="seagreen")
-        plt.plot(y_d_pred_gb, label="D_gb", ls=":", color="coral")
-        plt.plot(y_w_pred_ab, label="W_ab", ls="--", color="royalblue")
-        plt.plot(y_d_pred_ab, label="D_ab", ls=":", color="royalblue")
+        plt.plot(y_d_pred_rf_s*x_d_maxs, label="D_rf_s", ls=":", color="coral")
+        #plt.plot(y_d_pred_gb, label="D_gb", ls=":", color="coral")
+        #plt.plot(y_w_pred_ab, label="W_ab", ls="--", color="royalblue")
+        #plt.plot(y_d_pred_ab, label="D_ab", ls=":", color="royalblue")
         plt.plot(y_test, label="T")
         plt.legend()
         plt.show()
