@@ -132,8 +132,8 @@ for e in df_calls.index:
                 v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
                 v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
                 #df_calls_estim_w_ab.loc[e, "CSPL_RECEIVED_CALLS"] = 0
-                v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
-                v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
+                v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
+                v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
 
             df_calls_estim_total.loc[e, "CSPL_RECEIVED_CALLS"] = np.max([v1,v2,v3,v4])
 
