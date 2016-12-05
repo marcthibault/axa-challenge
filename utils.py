@@ -20,6 +20,23 @@ empty_weeks = [(datetime(year=2012,month=12,day=28),datetime(year=2013,month=1,d
                    (datetime(year=2013,month=11,day=20),datetime(year=2013,month=11,day=27)),
                    (datetime(year=2013,month=12,day=22),datetime(year=2013,month=12,day=29))]
 
+def rolling_stats(Aprime, method = "flat", decay = 0.01):
+    A = np.array(Aprime)
+    N = np.size(A)
+    rolling_mean = 0
+    rolling_var = 0
+    if method == "flat":
+        rolling_mean = np.sum(A) / N
+        rolling_var = np.sum((A - rolling_mean)**2) / (N - 1)
+    else:
+        weights = np.exp(- decay * np.array(range(0, N)))
+        B = A * weights
+        rolling_mean = np.sum(B) / np.sum(weights)
+        C = (A - rolling_mean)**2 * weights
+        rolling_var = np.sum(C) / np.sum(weights)
+
+    return rolling_mean, rolling_var
+
 def approx_svd(mat, k):
     U,s,V = np.linalg.svd(mat, full_matrices=False)
     S = np.diag(s[0:k])

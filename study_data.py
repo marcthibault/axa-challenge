@@ -29,12 +29,28 @@ def load_estims():
 
     #return [estims_d_ab, estims_w_ab]
     #return [estims_d_ab, estims_w_ab, estims_d_rf, estims_w_rf, estims_d_gb, estims_w_gb]
-    return [estims_d_rf, estims_w_rf, estims_d_gb, estims_w_gb]
+    #return [estims_d_rf, estims_w_rf, estims_d_gb, estims_w_gb]
+    return [estims_d_rf, estims_w_rf]
 
 
-file = "Tech. Axa"
+file = "Téléphonie"
 
 df_calls = pd.read_csv("csv/"+file+".csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index()
+
+last_call = 0
+for e in df_calls.index:
+    if np.isnan(df_calls.loc[e,"CSPL_RECEIVED_CALLS"]):
+        to_assess = False
+        for (d1,d2) in empty_weeks:
+            if d2 > e >= d1:
+                to_assess = True
+                break
+
+        if not to_assess:
+            df_calls.loc[e, "CSPL_RECEIVED_CALLS"] = last_call
+
+    else:
+        last_call = int(df_calls.loc[e,"CSPL_RECEIVED_CALLS"])
 
 df_calls_estim_w_rf = pd.DataFrame(index=df_calls.index, columns=df_calls.columns)
 #df_calls_estim_w_ab = pd.DataFrame(index=df_calls.index, columns=df_calls.columns)
@@ -56,40 +72,56 @@ for i in range(0,7):
     global_data_d+=[create_day_matrix(df_calls,i)]
 
 need_refit = True
-last_call = 0
 
 regrs = load_estims()
 
-empty_weeks = [(datetime(year=2012,month=12,day=28),datetime(year=2013,month=1,day=4)),
-                   (datetime(year=2013,month=2,day=2),datetime(year=2013,month=2,day=9)),
-                   (datetime(year=2013,month=3,day=6),datetime(year=2013,month=3,day=13)),
-                   (datetime(year=2013,month=4,day=10),datetime(year=2013,month=4,day=17)),
-                   (datetime(year=2013,month=5,day=13),datetime(year=2013,month=5,day=20)),
-                   (datetime(year=2013,month=6,day=12),datetime(year=2013,month=6,day=19)),
-                   (datetime(year=2013,month=7,day=16),datetime(year=2013,month=7,day=23)),
-                   (datetime(year=2013,month=8,day=15),datetime(year=2013,month=8,day=22)),
-                   (datetime(year=2013,month=9,day=14),datetime(year=2013,month=9,day=21)),
-                   (datetime(year=2013,month=10,day=18),datetime(year=2013,month=10,day=25)),
-                   (datetime(year=2013,month=11,day=20),datetime(year=2013,month=11,day=27)),
-                   (datetime(year=2013,month=12,day=22),datetime(year=2013,month=12,day=29))]
+
 
 means_call = np.nanmean(global_data_w[6][:90],axis=0)
-print(means_call)
+
+k_mean = 2
+rolling_mean_global = [0]*7
+for s in range(0,7):
+    rolling_mean_global[s] = np.zeros(global_data_w[s][k_mean-1:].shape)
+    for i in range(0,k_mean-1):
+        rolling_mean_global[s]+=global_data_w[s][i:-k_mean+i+1]/k_mean
+    rolling_mean_global[s]+=global_data_w[s][k_mean-1:]/k_mean
+
+rolling_var_global = [0]*7
+for s in range(0,7):
+    rolling_var_global[s] = np.zeros(global_data_w[s][k_mean-1:].shape)
+    nb_added = 0
+    for i in range(0,k_mean-1):
+
+        rolling_var_global[s]+=(global_data_w[s][i:-k_mean+i+1]-rolling_mean_global[s])**2/k_mean
+    rolling_var_global[s]+=(global_data_w[s][k_mean-1:]-rolling_mean_global[s])**2/k_mean
+
+
+plt.plot((global_data_w[0][k_mean-1:103,-48+2*11]-rolling_mean_global[0][:103-k_mean+1,-48+2*11])/rolling_var_global[0][:103-k_mean+1,-48+2*11])
+plt.show()
 
 if True:
     for i in range(0, 7):
-        local_data_w[i] = global_data_w[i][:103]
-        local_data_d[i] = global_data_d[i][:103]
+        local_data_w[i] = global_data_w[i][k_mean-1:97]
+        local_data_d[i] = global_data_d[i][k_mean-1:97]
         for h in range(0, 24):
             for minute in [0, 30]:
                 print(48 * i + 2 * h + int(minute / 30))
                 for est in range(0, len(regrs)):
                     if est % 2 == 0:
-                        regrs[est][48 * i + 2 * h + int(minute / 30)].fit(
-                            *create_training_xy_hour(local_data_d[i], h, minute))
+                        X,y = create_training_xy_hour(local_data_d[i], h, minute)
+                        #X = (X[1:]-X[:-1])
+                        #y = (y[1:]-y[:-1])
+                        X = X - rolling_mean_global[i][:97-k_mean,-48:]
+                        y = y - rolling_mean_global[i][:97-k_mean,-48+2*h+int(minute/30)]
+                        regrs[est][48 * i + 2 * h + int(minute / 30)].fit(X,y)
                     else:
-                        regrs[est][48 * i + 2 * h + int(minute / 30)].fit(
-                            *create_training_xy_hour(local_data_w[i], h, minute))
+                        X, y = create_training_xy_hour(local_data_w[i], h, minute)
+                        #X = (X[1:] - X[:-1])
+                        #y = (y[1:] - y[:-1])
+                        X = X - rolling_mean_global[i][:97-k_mean]
+                        y = y - rolling_mean_global[i][:97-k_mean, -48+2*h+int(minute/30)]
+                        regrs[est][48 * i + 2 * h + int(minute / 30)].fit(X,y)
 
 
 for e in df_calls.index:
@@ -112,30 +144,48 @@ for e in df_calls.index:
             df_calls.loc[e, "CSPL_RECEIVED_CALLS"] = last_call
         else:
             day_data = global_data_d[weekday][w_estim-1]
+            print("daydata: "+str(np.sum(np.isnan(day_data))))
             week_data = global_data_w[weekday][w_estim-2]
+            rolling_week_data = rolling_mean_global[weekday][w_estim-2-k_mean+1]
+            rolling_week_std_data = np.sqrt(rolling_var_global[weekday][w_estim-2-k_mean+1])
+            print("rolling_week: " + str(np.sum(np.isnan(rolling_week_data))))
+            print("rolling_week: " + str(np.sum(rolling_week_std_data==0)))
             #df_calls_estim_w.loc[e, "CSPL_RECEIVED_CALLS"] = regrs.predict()
             df_calls_estim_dummy.loc[e, "CSPL_RECEIVED_CALLS"] = day_data[2*e.hour+int(e.minute/30)]
             #df_calls_estim_dummy_mean.loc[e, "CSPL_RECEIVED_CALLS"] = means_call[48*weekday+2*e.hour+int(e.minute/30)]
-            if day_data[2*e.hour+int(e.minute/30)] != 0 and means_call[48*weekday+2*e.hour+int(e.minute/30)] != 0:
-                #df_calls_estim_d_ab.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                #df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
-                v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                #df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
-                #df_calls_estim_w_ab.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                #df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
-                v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
-                #df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
-            else:
-                #df_calls_estim_d_ab.loc[e, "CSPL_RECEIVED_CALLS"] = 0
-                v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
-                v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
-                #df_calls_estim_w_ab.loc[e, "CSPL_RECEIVED_CALLS"] = 0
-                v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
-                v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
+            # if day_data[2*e.hour+int(e.minute/30)] != 0 and means_call[48*weekday+2*e.hour+int(e.minute/30)] != 0:
+            #     #df_calls_estim_d_ab.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     #df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
+            #     v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     #df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
+            #     #df_calls_estim_w_ab.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     #df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
+            #     v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
+            #     #df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
+            # else:
+            #     #df_calls_estim_d_ab.loc[e, "CSPL_RECEIVED_CALLS"] = 0
+            #     v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
+            #     v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]
+            #     #df_calls_estim_w_ab.loc[e, "CSPL_RECEIVED_CALLS"] = 0
+            #     v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
+            #     v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
 
-            df_calls_estim_total.loc[e, "CSPL_RECEIVED_CALLS"] = np.max([v1,v2,v3,v4])
+            #v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]+day_data[2*e.hour+int(e.minute/30)]
+            data_used = (day_data - rolling_week_data[-48:])
+            data_used[rolling_week_std_data[-48:]!=0] /= rolling_week_std_data[-48:][rolling_week_std_data[-48:]!=0]
+            v1 = df_calls_estim_d_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([data_used])[0]*rolling_week_std_data[-48+2*e.hour+int(e.minute/30)]+rolling_week_data[-48+2*e.hour+int(e.minute/30)]
+            #v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data])[0]+day_data[2*e.hour+int(e.minute/30)]
+            #v2 = df_calls_estim_d_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[2][48*weekday+2*e.hour+int(e.minute/30)].predict([day_data-rolling_week_data[-48:]])[0]+rolling_week_data[-48+2*e.hour+int(e.minute/30)]
+            #v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]+day_data[2*e.hour+int(e.minute/30)]
+            data_used = (week_data - rolling_week_data)
+            data_used[rolling_week_std_data != 0] /= rolling_week_std_data[rolling_week_std_data != 0]
+            v3 = df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[1][48*weekday+2*e.hour+int(e.minute/30)].predict([data_used])[0]*rolling_week_std_data[-48+2*e.hour+int(e.minute/30)]+rolling_week_data[-48+2*e.hour+int(e.minute/30)]
+            #v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]+day_data[2*e.hour+int(e.minute/30)]
+            #v4 = df_calls_estim_w_gb.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data-rolling_week_data])[0]+rolling_week_data[-48+2*e.hour+int(e.minute/30)]
+
+            #df_calls_estim_total.loc[e, "CSPL_RECEIVED_CALLS"] = np.max([v1,v2,v3,v4])
 
             #df_calls_estim_w_rf.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[3][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data/day_data[2*e.hour+int(e.minute/30)]*means_call[48*weekday+2*e.hour+int(e.minute/30)]])[0]*day_data[2*e.hour+int(e.minute/30)]/means_call[48*weekday+2*e.hour+int(e.minute/30)]
             #df_calls_estim_w.loc[e, "CSPL_RECEIVED_CALLS"] = regrs[0][48*weekday+2*e.hour+int(e.minute/30)].predict([week_data])[0]
@@ -154,7 +204,7 @@ for e in df_calls.index:
         need_refit = False
 
 
-df_calls_estim_total.to_csv("csv/"+file+"_result.csv")
+df_calls_estim_total.to_csv("csv/"+file+"_result.csv", sep=";", header=True, index_label="DATE")
 
 plt.plot(df_calls.values)
 plt.plot(df_calls_estim_d_rf.values, linewidth=1., color="turquoise", ls="--", label="d_rf")

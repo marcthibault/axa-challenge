@@ -8,6 +8,7 @@ matplotlib.style.use('ggplot')
 from datetime import datetime
 from rf_estim import *
 from gb_366_estim import *
+from compute_missing_ar import *
 
 def load_data_create_days(csv_data, day_max=-1):
     results = []
@@ -49,42 +50,21 @@ if __name__=="__main__":
             current_date = datetime(year=int(dd[0]), month=int(dd[1]), day=int(dd[2]), hour=int(split_line[1].split(":")[0]), minute=int(split_line[1].split(":")[1]))
             current_cat = " ".join(split_line[2:-1])
 
-            if current_cat in ['Prestataires']:
-                result_line=line.replace("\n","")[:-1]+str(0)
-                f_r.write(result_line+"\n")
-            else:
-                #if current_cat not in datas:
-                #    datas[current_cat]=create_data(current_cat)
-                    #datas[current_cat]=create_data_hour(current_cat)
+            if current_cat not in datas:
+                print("Predicting " + current_cat)
+                # predict_cat(current_cat)
+                datas[current_cat] = pd.read_csv("csv/"+current_cat+"_result.csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index() * 1.6075
 
-                weekday = current_date.weekday()
-                w_estim = current_date.isocalendar()[1] + 51
-                if current_date.year == 2013:
-                    w_estim+=52
+                # datas[current_cat]=create_data(current_cat) # submission
+                # datas[current_cat]=create_data_hour(current_cat)
 
-                #r = k_nn_estim_oneday(datas[current_cat][weekday][w_estim-2],datas[current_cat][weekday],5, dist_eucl)
-                #r = datas[current_cat][weekday][1].predict([datas[current_cat][weekday][0][w_estim-2]])
-                #r = datas[current_cat][weekday+2*current_date.hour+int(current_date.minute/30)][1].predict([datas[current_cat][weekday+2*current_date.hour+int(current_date.minute/30)][0][w_estim-2]])
-                #r_h = np.ceil(r[0][2*current_date.hour+int(current_date.minute/30)])
-                #r_h = np.ceil(r[0])
-                if current_date.hour<5 or current_date.hour>23:
-                    r_h=100
-                elif current_cat == "Téléphonie":
-                    if current_date.hour > 9 and current_date.hour < 18:
-                        r_h=2000
-                    else:
-                        r_h=1000
-                elif current_cat == "CMS":
-                    r_h=1
-                elif current_cat == "Nuit":
-                    r_h=100
-                else:
-                    r_h=600
-                #if np.isnan(r_h):
-                #    print("pb with "+current_cat)
-                result_line=line.replace("\n","")[:-1]+str(int(np.ceil(r_h)))
-                #result_line=line.replace("\n","")[:-1]+str(0)
-                f_r.write(result_line+"\n")
+            print("Filling in " + current_cat + " at date " + current_date.strftime("%B %d, %Y"))
+            r_h = int(datas[current_cat].xs(current_date))
+            #if np.isnan(r_h):
+            #    print("pb with "+current_cat)
+            result_line = line.replace("\n", "")[:-1] + str(int(np.ceil(r_h)))
+            #result_line=line.replace("\n","")[:-1]+str(0)
+            f_r.write(result_line + "\n")
 
         else:
             f_r.write(line)
