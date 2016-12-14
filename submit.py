@@ -38,6 +38,7 @@ if __name__=="__main__":
     counter=0
     f = open('submission.txt', 'r',encoding='utf8')
     f_r = open('submission_result.txt', 'w', encoding='utf8')
+
     for line in f:
         nline = line.replace("\n","").replace("\t"," ")
         split_line = nline.split(" ")
@@ -51,9 +52,13 @@ if __name__=="__main__":
             current_cat = " ".join(split_line[2:-1])
 
             if current_cat not in datas:
+                if current_cat == "Téléphonie":
+                    multiplicator = 1.68
+                else:
+                    multiplicator = 1.28
                 print("Predicting " + current_cat)
                 # predict_cat(current_cat)
-                datas[current_cat] = pd.read_csv("csv/"+current_cat+"_result.csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index() * 1.6
+                datas[current_cat] = pd.read_csv("csv/"+current_cat+"_result.csv", header=0, sep=";", parse_dates=True, infer_datetime_format =True, index_col=0).sort_index() * multiplicator
 
                 # datas[current_cat]=create_data(current_cat) # submission
                 # datas[current_cat]=create_data_hour(current_cat)
